@@ -1,0 +1,4 @@
+git status
+git add .
+git commit -m "Ajout: fonctionnalité X / correction Y"
+git push origin main
