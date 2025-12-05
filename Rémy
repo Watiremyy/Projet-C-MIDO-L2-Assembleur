@@ -1,0 +1,73 @@
+Plan
+On crée d'abord l'assembleur, puis l'executeur :
+
+Les différentes variables:
+unsigned char Memory[65535] -> Mémoire de 65535 octets ( unsigned char = 1 octets)
+int reg[32] -> Tableau de 32 int ( chaque int = 4 octets en C en général donc c'est good), on peut préciser int32_t pour le type pour s'assurer que c'est bien des registre de 32 bits ( dans certains compilateur, int est pas 4 octets ).
+
+
+
+cahier de charge pour un assembleur/ comment créer l'assembleur ? :
+1. Passe 1 : repérer les étiquettes + adresses
+Tu fais un premier parcours du fichier pour construire une table de symboles :
+addr = 0
+Pour chaque ligne :
+Si la ligne contient une étiquette nom: → tu enregistres nom -> addr dans une table.
+Si la ligne contient une instruction (un opcode) → tu feras plus tard une Instruction pour cette ligne et tu fais addr += 4.
+À la fin :
+Toutes les étiquettes ont une adresse numérique correcte (multiples de 4, entre 0 et 65535).
+2. Passe 2 : construire les Instruction et remplir Src2
+Deuxième parcours du fichier :
+Pour chaque ligne avec instruction, tu crées une structure Instruction :
+Instruction.address = addr (avec le même compteur que dans la passe 1, ou bien tu relis les adresses depuis la passe 1).
+Tu détermines l’opcode, rd, rn, etc.
+Si l’instruction est un saut vers une étiquette (ex : jzs fin) :
+Tu prends le nom fin,
+Tu cherches fin dans la table de symboles de la passe 1,
+Tu récupères son adresse (par ex. 20 → 0x0014),
+Tu mets cette valeur dans le champ Src2 de ta structure (les 16 bits de poids faible de l’instruction),
+Et tu mets Imm = 1 (puisque c’est une immédiate).
+Pour les autres instructions, Src2 est soit un registre rm, soit une immédiate numérique #n.
+Ensuite tu encodes :
+opcode (5 bits), rd (5), rn (5), Imm (1), Src2 (16)
+et tu écris le mot de 32 bits en hexa dans le fichier hexa.txt.
+Remarque importante pour les sauts :
+Pour les instructions 21–27 (jmp, jzs, etc.), les champs Dest et Src1 n’ont aucune signification dans le sujet → dans le mot final, tu peux les mettre à 0.
+
+Problèmes potentiels à gérer : 
+1. Phase « collecte des étiquettes »
+Erreurs classiques :
+Doublon d’étiquette
+Même nom défini deux fois → erreur claire, avec numéro de ligne.
+Syntaxe d’étiquette incorrecte
+Pas de : après le nom
+Nom vide ou qui commence par un caractère interdit
+Nom avec caractères bizarres (ex : toto-1: si tu n’autorises que lettres/chiffres/underscore)
+Étiquette seule sans instruction
+Pas grave en soi, mais il faut être cohérent : tu associes l’adresse de la prochaine instruction, ou tu interdis ça (au choix, mais il faut être clair).
+2. Phase « création des instructions »
+Erreurs de base :
+Opcode inconnu
+Mot qui ne correspond à aucune instruction définie dans le sujet → erreur.
+Mauvais nombre d’opérandes
+Par ex. add r1, r2 (il en manque un), jmp r1, r2 (il y en a trop), etc.
+Mauvais type d’opérande
+Là où tu attends un registre : l’utilisateur met un nombre.
+Là où tu attends une valeur immédiate #n : il met un registre.
+Adresse mémoire mal écrite (par ex. ldb r1, r2 au lieu de ldb r1, (r2) ou (r2)#4 selon la syntaxe que tu choisis).
+Registre hors plage
+r33, r-1, ou rA → tu refuses (seuls r0 à r31 sont valides).
+Valeur immédiate hors plage 16 bits
+Immédiate trop grande ou trop petite pour tenir sur 16 bits (en prenant en compte le signe) → erreur.
+Exemple : une adresse ou un #n qui ne tient pas dans -32768 … 32767 si tu fais un sign-extend classique.
+Saut vers une étiquette inexistante
+jmp boucle alors que boucle: n’a jamais été définie → erreur de liaison.
+3. Erreurs liées au fichier / lignes
+Ligne totalement incompréhensible
+Ni vide, ni commentaire, ni instruction valide → erreur de syntaxe générale.
+Espaces / séparateurs mal utilisés
+Virgules manquantes, trop de virgules, aucun espace entre opcode et opérandes, etc.
+→ à gérer via ton parseur, mais ça reste des erreurs « de forme ».
+Valeurs négatives mal écrites
+Par ex. #- 12, #--3, #h-1A si tu n’acceptes pas ce format.
+
